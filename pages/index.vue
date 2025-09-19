@@ -99,10 +99,14 @@ v-model = "city" :class="{ 'highlight-selection': isSelectedValid }">
 </template>
 
 <script setup >
-  import { ref, computed, onMounted } from 'vue';
-  import { useAsyncData } from '#app';
+  import { ref, computed, onMounted, onUnmounted, callWithAsyncErrorHandling  } from 'vue';
+  //import { useAsyncData } from '#app';
   const selectedValue = ref('');
   import { refreshNuxtData } from '#app'; // Import refreshNuxtData
+
+   // using fetch instead useAsyncdata to avoid issue stopping fetch data once it's already onMounted.
+  const data = ref(null);
+  const abortController = new AbortController();
 
   // Computed property to determine if the selected value is 'valid' (not empty)
   const isSelectedValid = computed(() => selectedValue.value !== '');
@@ -174,20 +178,26 @@ v-model = "city" :class="{ 'highlight-selection': isSelectedValid }">
     callWeatherData();
   });
 
-  async function callWeatherData() {
-   const {data, error, pending, execute, refresh, status} = await useAsyncData ('weather', async () => {
-      immediate:true // to not wait for under interaction
-      const [weather] = await Promise.all([
-        $fetch(`https://api.openweathermap.org/data/2.5/forecast/daily?q=${city.value}&cnt=${numDays.value}&units=${unitType.value}&appid=${Key.value}`, {
-        }),
-      ])
-      return {weather}
-  },
-  {
-    watch: [city, numDays, unitType], // Watch the city.value, numDays.value, unitType.value ref for changes
-  })
-  updateWeatherData(data);
-}
+  async function callWeatherData () {
+    try {
+      const response = await fetch(`https://api.openweathermap.org/data/2.5/forecast/daily?q=${city.value}&cnt=${numDays.value}&units=${unitType.value}&appid=${Key.value}`, { signal: abortController.signal });
+      data.value = await response.json();
+    } catch (error) {
+      if (error.name === 'AbortError') {
+        alert('Fetch aborted');
+      } else {
+        alert('Error fetching data:', error);
+      }
+    }
+    updateWeatherData(data);
+    return {data}
+  }
+
+  //when the component is unmounted. This will cancel any pending fetch requests associated with that controller.
+  onUnmounted(() => {
+    abortController.abort();
+  });
+
 
 function updateWeatherData(data) {
     iconImages.value = []
@@ -218,38 +228,38 @@ function updateWeatherData(data) {
        tempSign.value = '(°F)';
     }
   
-   for (const f of data.value.weather.list){
-    humidities.value.push(`${f.humidity}`)
-    temps.value.push(`${Math.floor(f.temp.day)}`)
-    temps_min.value.push(`${Math.floor(f.temp.min)}`)
-    temps_max.value.push(`${Math.floor(f.temp.max)}`)
-    temps_FeelLike.value.push(`${Math.floor(f.feels_like.day)}`)
-    windSpeeds.value.push(`${Math.floor(f.speed)}`)
-    windDegs.value.push(`${f.deg}`)
-    windGusts.value.push(`${f.gust}`)
-    cloudss.value.push(`${f.clouds}`)
-    rains.value.push(`${f.pop}`)
-    for (const [key, value] of Object.entries(f.weather)) {
-        const weatherValue = value
-        for (var [keyw, valuew] of Object.entries(weatherValue)) {
-          switch (keyw) {
-            case 'description':
-                conditionDescs.value.push(valuew)
-                break;
-            case 'icon':
-                conditionIcons.value.push(`/${valuew}.png`)// to be used w/ @nuxt/image & NuxtPicture
-                break;
-            case 'id':
-                conditionIds.value.push(valuew)
-                break;
-            case 'main':
-                conditionMains.value.push(valuew)
-                break;
-            default :
-                console.log('invalid:', valuew);
-            }
-        }
-    }
+    for (const f of data.value.list){
+      humidities.value.push(`${f.humidity}`)
+      temps.value.push(`${Math.floor(f.temp.day)}`)
+      temps_min.value.push(`${Math.floor(f.temp.min)}`)
+      temps_max.value.push(`${Math.floor(f.temp.max)}`)
+      temps_FeelLike.value.push(`${Math.floor(f.feels_like.day)}`)
+      windSpeeds.value.push(`${Math.floor(f.speed)}`)
+      windDegs.value.push(`${f.deg}`)
+      windGusts.value.push(`${f.gust}`)
+      cloudss.value.push(`${f.clouds}`)
+      rains.value.push(`${f.pop}`)
+      for (const [key, value] of Object.entries(f.weather)) {
+          const weatherValue = value
+          for (var [keyw, valuew] of Object.entries(weatherValue)) {
+            switch (keyw) {
+              case 'description':
+                  conditionDescs.value.push(valuew)
+                  break;
+              case 'icon':
+                  conditionIcons.value.push(`/${valuew}.png`)// to be used w/ @nuxt/image & NuxtPicture
+                  break;
+              case 'id':
+                  conditionIds.value.push(valuew)
+                  break;
+              case 'main':
+                  conditionMains.value.push(valuew)
+                  break;
+              default :
+                  console.log('invalid:', valuew);
+              }
+          }
+      }
    }   
   
   }
@@ -266,3 +276,7 @@ function updateWeatherData(data) {
 </script>
 <style lang="css" scoped>
 </style>
+
+
+
+ 

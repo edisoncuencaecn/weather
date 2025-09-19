@@ -19,7 +19,7 @@ export default defineNuxtConfig({
     // Other image options if needed
   },
  
-  ssr: false,
+  //ssr: false,
   app: {
     head: {
       link: [
